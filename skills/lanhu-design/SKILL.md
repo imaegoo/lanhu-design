@@ -5,7 +5,7 @@ license: MIT; see LICENSE.txt
 compatibility: Requires Node.js 18+, network access to Lanhu (lanhuapp.com or a private deployment), and a valid LANHU_COOKIE environment variable. For private deployments set LANHU_HOST (e.g. https://lanhu.example.com:30080) and obtain the cookie via `lanhu auth login -u <account>`.
 metadata:
   author: oyjt
-  version: 1.5.0
+  version: 1.5.1
 ---
 
 # Lanhu Design
