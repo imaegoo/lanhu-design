@@ -13,7 +13,8 @@
     "test:skill": "node tests/self_check.mjs",
     "typecheck": "tsc --noEmit",
     "check": "pnpm typecheck && pnpm test && pnpm build",
-    "prepack": "pnpm check"
+    "prepack": "pnpm check",
+    "version": "node scripts/sync-skill-version.mjs && git add skills/lanhu-design/SKILL.md"
   },
   "engines": { "node": ">=22.12" },
   "keywords": ["lanhu", "design-to-code", "agent-skill", "cli"],
