@@ -155,7 +155,7 @@ jobs:
           fi
 
       - name: Create GitHub release
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.push_tag && !inputs.dry_run)
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}
