@@ -2,6 +2,11 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)；版本以 git tag（`v*`）形式发布，安装/更新时可指定 tag 锁定版本。
 
+## 1.5.1 - 2026-10-26
+
+- 新增手动触发的 npm OIDC 可信发布工作流（`publish.yml`）：支持版本递增、dist-tag、dry-run，发布后可自动提交版本、推送标签并创建 GitHub Release。
+- 修复 `.gitignore` 混合编码导致的乱码。
+
 ## 1.5.0 - 2026-10-26
 
 私有部署分支（包名 `@imaegoo/lanhu-design`）。
