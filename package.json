@@ -20,7 +20,9 @@
   "keywords": ["lanhu", "design-to-code", "agent-skill", "cli"],
   "author": "oyjt",
   "license": "MIT",
-  "repository": { "type": "git", "url": "git+https://github.com/oyjt/lanhu-design.git" },
+  "repository": { "type": "git", "url": "git+https://github.com/imaegoo/lanhu-design.git" },
+  "homepage": "https://github.com/imaegoo/lanhu-design#readme",
+  "bugs": { "url": "https://github.com/imaegoo/lanhu-design/issues" },
   "publishConfig": {
     "access": "public",
     "provenance": true
