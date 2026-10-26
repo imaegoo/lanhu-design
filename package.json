@@ -1,7 +1,7 @@
 {
-  "name": "lanhu-design",
-  "version": "1.4.2",
-  "description": "蓝湖设计稿读取、规格提取与切图下载 CLI 和 Agent Skill",
+  "name": "@imaegoo/lanhu-design",
+  "version": "1.5.0",
+  "description": "蓝湖设计稿读取、规格提取与切图下载 CLI（支持私有部署，可自定义 host）",
   "type": "module",
   "bin": { "lanhu": "dist/cli.js" },
   "files": ["dist", "skills/lanhu-design", "README.md", "CHANGELOG.md", "LICENSE"],

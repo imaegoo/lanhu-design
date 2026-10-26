@@ -3,6 +3,7 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { rewriteUrl } from "./lanhu-client.mjs";
 
 const SCALE_GROUPS = {
   "ios-all": [
@@ -202,8 +203,8 @@ async function fetchBuffer(url, referer) {
   }
 
   const headers = { "User-Agent": "Mozilla/5.0" };
-  if (referer) headers.Referer = referer;
-  const response = await fetch(url, { headers, signal: AbortSignal.timeout(30_000) });
+  headers.Referer = referer || `${process.env.LANHU_HOST || "https://lanhuapp.com"}/`;
+  const response = await fetch(rewriteUrl(url), { headers, signal: AbortSignal.timeout(30_000) });
   if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
   return Buffer.from(await response.arrayBuffer());
 }

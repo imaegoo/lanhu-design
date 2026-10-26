@@ -1,12 +1,15 @@
-# lanhu-design
+# @imaegoo/lanhu-design
 
 用于读取和导出 [蓝湖](https://lanhuapp.com) 设计稿的命令行工具，同时提供可安装的 Agent Skill。
 
-通过 `lanhu` 命令可以完成浏览器授权、设计图查询、预览图下载、设计规格提取、切图下载和设计上下文导出。
+本仓库是 [oyjt/lanhu-design](https://github.com/oyjt/lanhu-design) 的私有部署分支（MIT）：在保留全部原有命令的基础上，增加**自定义蓝湖 host** 与**账号密码登录**，可直接对接私有化部署的蓝湖（例如 `https://lanhu.example.com:30080`）。
+
+通过 `lanhu` 命令可以完成登录授权、设计图查询、预览图下载、设计规格提取、切图下载和设计上下文导出。
 
 ## 功能
 
-- 使用系统默认浏览器完成蓝湖登录
+- 支持公开版蓝湖与私有部署（自定义 host、账号密码登录）
+- 使用系统默认浏览器完成公开版蓝湖登录
 - 列出项目中的设计图
 - 下载设计预览图
 - 导出 HTML、CSS 和 Design Tokens 等设计规格
@@ -18,7 +21,7 @@
 
 - Node.js 22.12 或更高版本
 - macOS、Windows 或 Linux
-- 能够访问 `lanhuapp.com` 的网络环境
+- 能够访问蓝湖服务（`lanhuapp.com` 或你的私有部署地址）
 - 已加入对应蓝湖项目的账号
 
 ## 快速开始
@@ -26,7 +29,7 @@
 ### 1. 安装（推荐）
 
 ```bash
-npx lanhu-design@latest install
+npx @imaegoo/lanhu-design@latest install
 ```
 
 安装向导会自动：
@@ -69,11 +72,44 @@ $env:LANHU_URL='https://lanhuapp.com/web/#/item/project/stage?tid=xxx&pid=xxx'
 lanhu designs $env:LANHU_URL
 ```
 
+## 私有部署（自定义 host）
+
+私有化部署的蓝湖与公开版使用同一套接口，但域名、登录方式和资源地址不同。CLI 已内置适配：
+
+```bash
+# 1. 设置私有部署地址（写入 ~/.config/lanhu-design/config.json）
+lanhu host set https://lanhu.example.com:30080
+
+# 2. 账号密码登录（私有部署无法读取 lanhuapp.com 的浏览器 Cookie）
+lanhu auth login -u you@example.com
+
+# 3. 后续命令与公开版完全一致
+lanhu designs "https://lanhu.example.com:30080/web/#/item/project/stage?tid=...&pid=..."
+```
+
+host 解析优先级：`--host` 参数 > `LANHU_HOST` 环境变量 > 配置文件 > 默认 `https://lanhuapp.com`。
+
+CLI 会自动处理私有部署的三处差异：
+
+1. 设计数据服务（DDS）与主站同源，走 `/api/dds/...`，不再请求 `dds.lanhuapp.com`；
+2. 接口返回的 `lanhuapp.com` 或内网 IP 资源地址会改写回当前 host；
+3. 旧版 TLS 重协商（`ERR_SSL_UNSAFE_LEGACY_RENEGOTIATION_DISABLED`）已内置兼容开关。
+
+常用命令：
+
+```bash
+lanhu host                 # 查看当前 host 与来源
+lanhu host reset           # 恢复默认 https://lanhuapp.com
+lanhu auth status          # 查看当前 host 的凭据状态
+lanhu auth logout          # 删除当前 host 的凭据
+```
+
 ## 登录管理
 
 | 命令 | 用途 |
 | --- | --- |
-| `lanhu auth` | 登录或复用已有登录凭据 |
+| `lanhu auth` | 登录或复用已有登录凭据（公开版） |
+| `lanhu auth login -u <账号>` | 账号密码登录（私有部署） |
 | `lanhu auth status` | 查看当前凭据状态 |
 | `lanhu auth refresh` | 重新打开浏览器并刷新 Cookie |
 | `lanhu auth import` | 手动导入 Cookie |
@@ -115,6 +151,8 @@ lanhu auth import
 | 命令 | 用途 |
 | --- | --- |
 | `lanhu install` | 安装或升级 CLI 和全局 Agent Skill |
+| `lanhu host set <url>` | 设置私有部署 host |
+| `lanhu auth login -u <账号>` | 账号密码登录（私有部署） |
 | `lanhu designs "$LANHU_URL"` | 列出项目设计图 |
 | `lanhu image "$LANHU_URL" --design 首页 --output .lanhu/images` | 下载指定设计图的预览图 |
 | `lanhu specs "$LANHU_URL" --design 首页 --output .lanhu/specs --download-images` | 导出设计规格及引用图片 |
@@ -224,13 +262,13 @@ Agent Skill 为 AI 编码助手提供蓝湖任务的识别规则、操作流程�
 推荐使用安装向导，一次安装 CLI 和全局 Agent Skill：
 
 ```bash
-npx lanhu-design@latest install
+npx @imaegoo/lanhu-design@latest install
 ```
 
 如需跳过登录凭据检查，可以执行：
 
 ```bash
-npx lanhu-design@latest install --no-auth
+npx @imaegoo/lanhu-design@latest install --no-auth
 lanhu auth
 ```
 

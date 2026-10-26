@@ -8,3 +8,11 @@ tmp/
 .env.*
 !.env.example
 .claude/settings.json
+
+# 本地调研快照与测试产物
+.research/
+.tmp-home/
+.tmp-out/
+
+# 打包产物
+*.tgz

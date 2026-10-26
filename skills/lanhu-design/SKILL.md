@@ -2,10 +2,10 @@
 name: lanhu-design
 description: "Use for Lanhu (蓝湖) UI design handoffs and lanhuapp.com design project links: list design screens, inspect screenshots and HTML/CSS specs, extract design tokens, download slices/assets, or implement UI. Trigger when the request explicitly mentions 蓝湖, Lanhu, lanhuapp.com, or the bundled Lanhu scripts. Do not use for standalone Figma/Sketch files, generic UI implementation, PRD/Axure docId links, or image editing unrelated to Lanhu."
 license: MIT; see LICENSE.txt
-compatibility: Requires Node.js 18+, network access to lanhuapp.com, and a valid LANHU_COOKIE environment variable.
+compatibility: Requires Node.js 18+, network access to Lanhu (lanhuapp.com or a private deployment), and a valid LANHU_COOKIE environment variable. For private deployments set LANHU_HOST (e.g. https://lanhu.example.com:30080) and obtain the cookie via `lanhu auth login -u <account>`.
 metadata:
   author: oyjt
-  version: 1.4.2
+  version: 1.5.0
 ---
 
 # Lanhu Design

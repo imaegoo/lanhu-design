@@ -106,7 +106,7 @@ try {
     // P3：把 HTML 引用的远程图片下载到本地，使保存的 HTML 可直接渲染。
     if (downloadImages) {
       const entries = Object.entries(imageUrlMapping);
-      const ref = referer || "https://lanhuapp.com/";
+      const ref = referer || `${process.env.LANHU_HOST || "https://lanhuapp.com"}/`;
       let ok = 0;
       const failed = [];
       for (const [localPath, remoteUrl] of entries) {

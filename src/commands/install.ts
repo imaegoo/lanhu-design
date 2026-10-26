@@ -3,6 +3,9 @@ import { LanhuError } from "../errors/lanhu-error.js";
 
 type CommandRunner = (command: string, args: string[], silent: boolean) => Promise<void>;
 
+export const PACKAGE_NAME = "@imaegoo/lanhu-design";
+export const SKILL_SOURCE = "imaegoo/lanhu-design";
+
 function runCommand(command: string, args: string[], silent: boolean): Promise<void> {
   const executable = process.platform === "win32" ? "cmd.exe" : command;
   const commandArgs = process.platform === "win32" ? ["/d", "/s", "/c", command, ...args] : args;
@@ -18,20 +21,20 @@ export async function installCliAndSkill(
   run: CommandRunner = runCommand,
 ) {
   const silent = options.silent ?? false;
-  options.onStatus?.("正在安装或升级 lanhu-design CLI...");
+  options.onStatus?.(`正在安装或升级 ${PACKAGE_NAME} CLI...`);
   try {
-    await run("npm", ["install", "-g", "lanhu-design@latest"], silent);
+    await run("npm", ["install", "-g", `${PACKAGE_NAME}@latest`], silent);
   } catch (error) {
-    throw new LanhuError("LANHU_INTERNAL_ERROR", "lanhu-design CLI 安装失败。", "请手动运行：npm install -g lanhu-design@latest", true, { cause: error });
+    throw new LanhuError("LANHU_INTERNAL_ERROR", `${PACKAGE_NAME} CLI 安装失败。`, `请手动运行：npm install -g ${PACKAGE_NAME}@latest`, true, { cause: error });
   }
 
-  options.onStatus?.("正在安装 lanhu-design Agent Skill...");
+  options.onStatus?.("正在安装蓝湖 Agent Skill...");
   try {
     // skills 会为不支持全局安装的 PromptScript 输出兼容性提示，这里只保留向导自身的明确状态。
-    await run("npx", ["-y", "skills", "add", "oyjt/lanhu-design", "-y", "-g"], true);
+    await run("npx", ["-y", "skills", "add", SKILL_SOURCE, "-y", "-g"], true);
   } catch (error) {
-    throw new LanhuError("LANHU_INTERNAL_ERROR", "lanhu-design Agent Skill 安装失败。", "请手动运行：npx skills add oyjt/lanhu-design -y -g", true, { cause: error });
+    throw new LanhuError("LANHU_INTERNAL_ERROR", "蓝湖 Agent Skill 安装失败。", `请手动运行：npx skills add ${SKILL_SOURCE} -y -g`, true, { cause: error });
   }
 
-  return { cliInstalled: true, skillInstalled: true, skillSource: "oyjt/lanhu-design" };
+  return { cliInstalled: true, skillInstalled: true, skillSource: SKILL_SOURCE };
 }

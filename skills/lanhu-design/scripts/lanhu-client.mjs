@@ -1,16 +1,22 @@
 #!/usr/bin/env node
 
+import "./tls-legacy.mjs";
 import { writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 
-const BASE_URL = "https://lanhuapp.com";
-const DDS_BASE_URL = "https://dds.lanhuapp.com";
+const DEFAULT_HOST = "https://lanhuapp.com";
+// 私有部署：由 CLI 通过 LANHU_HOST 传入；未设置时保持公开版行为。
+const CONFIGURED_HOST = (process.env.LANHU_HOST || "").trim().replace(/\/+$/, "");
+const BASE_URL = CONFIGURED_HOST || DEFAULT_HOST;
+const CUSTOM_HOST = BASE_URL !== DEFAULT_HOST;
+// 公开版的设计数据服务是独立域名；私有部署与主站同源（/api/dds/...）。
+const DDS_BASE_URL = CUSTOM_HOST ? BASE_URL : "https://dds.lanhuapp.com";
 const HTTP_TIMEOUT = Number(process.env.HTTP_TIMEOUT) || 30_000;
 
 const HEADERS = {
   "User-Agent":
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-  Referer: "https://lanhuapp.com/web/",
+  Referer: `${BASE_URL}/web/`,
   Accept: "application/json, text/plain, */*",
   "sec-ch-ua":
     '"Chromium";v="142", "Google Chrome";v="142", "Not_A Brand";v="99"',
@@ -19,6 +25,36 @@ const HEADERS = {
   "request-from": "web",
   "real-path": "/item/project/product",
 };
+
+/**
+ * 私有部署的接口仍可能返回 lanhuapp.com 或内网 IP 的资源地址，
+ * 统一改写回当前 host，保证预览图、Schema、切图都能下载。
+ */
+export function rewriteUrl(value) {
+  if (!value || !CUSTOM_HOST || typeof value !== "string") return value;
+  if (!/^https?:\/\//i.test(value)) return value;
+  try {
+    const parsed = new URL(value);
+    const base = new URL(BASE_URL);
+    if (parsed.host === base.host) return value;
+    const lanhuHost = /(^|\.)lanhuapp\.com$/i.test(parsed.hostname);
+    const assetPath = parsed.pathname.startsWith("/mos/");
+    if (!lanhuHost && !assetPath) return value;
+    return `${BASE_URL}${parsed.pathname}${parsed.search}`;
+  } catch {
+    return value;
+  }
+}
+
+export function rewriteUrlsDeep(value) {
+  if (!CUSTOM_HOST || value == null) return value;
+  if (typeof value === "string") return rewriteUrl(value);
+  if (Array.isArray(value)) return value.map((item) => rewriteUrlsDeep(item));
+  if (typeof value === "object") {
+    for (const key of Object.keys(value)) value[key] = rewriteUrlsDeep(value[key]);
+  }
+  return value;
+}
 
 function getCookie() {
   const cookie = process.env.LANHU_COOKIE;
@@ -52,15 +88,17 @@ async function requestJson(url, options) {
 }
 
 async function requestDdsJson(url) {
+  const headers = {
+    "User-Agent": HEADERS["User-Agent"],
+    "Referer": `${DDS_BASE_URL}/`,
+    "Accept": "application/json, text/plain, */*",
+    "Cookie": getCookie(),
+  };
+  // 公开版 DDS 接受占位 Authorization；私有部署只认会话 Cookie。
+  if (!CUSTOM_HOST) headers.Authorization = "Basic dW5kZWZpbmVkOg==";
   const response = await fetch(url, {
     signal: AbortSignal.timeout(HTTP_TIMEOUT),
-    headers: {
-      "User-Agent": HEADERS["User-Agent"],
-      "Authorization": "Basic dW5kZWZpbmVkOg==",
-      "Referer": `${DDS_BASE_URL}/`,
-      "Accept": "application/json, text/plain, */*",
-      "Cookie": getCookie(),
-    },
+    headers,
     redirect: "follow",
   });
   if (response.status === 401 || response.status === 403) {
@@ -74,15 +112,15 @@ export async function getVersionId(url, designId) {
   const params = parseUrl(url);
   const qs = new URLSearchParams({
     project_id: params.project_id,
-    img_limit: "500",
-    detach: "1",
+    dds_status: "1",
   });
   if (params.team_id) qs.set("team_id", params.team_id);
-  const data = await requestJson(`${BASE_URL}/api/project/multi_info?${qs}`);
-  if (data.code !== "00000") throw new Error(`multi_info 失败: ${data.msg}`);
+  // 用设计图列表取 latest_version：公开版与私有部署的响应结构一致。
+  const data = await requestJson(`${BASE_URL}/api/project/images?${qs}`);
+  if (data.code !== "00000") throw new Error(`获取设计图版本失败: ${data.msg || data.message || ""}`);
   const images = (data.data || {}).images || [];
-  const img = images.find(i => String(i.id) === String(designId));
-  if (!img) throw new Error(`multi_info 中未找到 design id=${designId}`);
+  const img = images.find((item) => String(item.id) === String(designId));
+  if (!img) throw new Error(`设计图列表中未找到 design id=${designId}`);
   const versionId = img.latest_version || img.version_id;
   if (!versionId) throw new Error(`design id=${designId} 没有 latest_version 字段`);
   return String(versionId);
@@ -94,11 +132,11 @@ export async function getDdsSchema(versionId) {
   if (data.code !== "00000" && data.code !== 0) {
     throw new Error(`store_schema_revise 失败 (code=${data.code}): ${data.msg || data.message || ""}`);
   }
-  const resourceUrl = (data.data || {}).data_resource_url;
+  const resourceUrl = rewriteUrl((data.data || {}).data_resource_url);
   if (!resourceUrl) throw new Error("store_schema_revise 未返回 data_resource_url");
   const resp = await fetch(resourceUrl, { signal: AbortSignal.timeout(HTTP_TIMEOUT) });
   if (!resp.ok) throw new Error(`Schema CDN HTTP ${resp.status}`);
-  return resp.json();
+  return rewriteUrlsDeep(await resp.json());
 }
 
 export async function getDesignSchema(url, designName) {
@@ -110,11 +148,16 @@ export async function getDesignSchema(url, designName) {
   const qs = new URLSearchParams({ dds_status: "1", image_id: design.id, project_id: params.project_id });
   if (params.team_id) qs.set("team_id", params.team_id);
   const imgData = await requestJson(`${BASE_URL}/api/project/image?${qs}`);
-  if (imgData.code !== "00000") throw new Error(`获取设计图详情失败: ${imgData.msg}`);
-  const latestVersion = (imgData.result.versions || [])[0];
+  if (imgData.code && imgData.code !== "00000") {
+    throw new Error(`获取设计图详情失败: ${imgData.msg || imgData.message || imgData.code}`);
+  }
+  // 公开版返回 { code, result }，私有部署（2.x）返回 { result }，两者都兼容。
+  const detail = imgData.result || imgData.data;
+  if (!detail) throw new Error(`获取设计图详情失败: ${imgData.msg || imgData.message || "响应缺少 result"}`);
+  const latestVersion = (detail.versions || [])[0];
   if (!latestVersion) throw new Error("设计图没有版本信息");
-  const sketchData = await requestJson(latestVersion.json_url);
-  const designImageUrl = getDesignImageUrl(design);
+  const sketchData = rewriteUrlsDeep(await requestJson(rewriteUrl(latestVersion.json_url)));
+  const designImageUrl = rewriteUrl(getDesignImageUrl(design));
 
   let schema = null, ddsError = null;
   try {
@@ -198,7 +241,8 @@ export async function getDesigns(url) {
     name: img.name,
     width: img.width,
     height: img.height,
-    url: img.url,
+    url: rewriteUrl(img.url),
+    latest_version: img.latest_version || img.version_id,
     has_comment: img.has_comment || false,
     update_time: img.update_time,
   }));
@@ -420,15 +464,18 @@ export async function getDesignSlicesInfo(
 
   const data = await requestJson(`${BASE_URL}/api/project/image?${qs}`);
 
-  if (data.code !== "00000") {
-    throw new Error(`获取设计图详情失败: ${data.msg}`);
+  if (data.code && data.code !== "00000") {
+    throw new Error(`获取设计图详情失败: ${data.msg || data.message || data.code}`);
   }
 
-  const result = data.result;
-  const latestVersion = result.versions[0];
-  const jsonUrl = latestVersion.json_url;
+  // 公开版返回 { code, result }，私有部署（2.x）返回 { result }。
+  const result = data.result || data.data;
+  if (!result) throw new Error(`获取设计图详情失败: ${data.msg || data.message || "响应缺少 result"}`);
+  const latestVersion = (result.versions || [])[0];
+  if (!latestVersion) throw new Error("设计图没有版本信息");
+  const jsonUrl = rewriteUrl(latestVersion.json_url);
 
-  const sketchData = await requestJson(jsonUrl);
+  const sketchData = rewriteUrlsDeep(await requestJson(jsonUrl));
   const meta = sketchData.meta || {};
   const sliceScale = Number.parseInt(
     sketchData.sliceScale || sketchData.exportScale || meta.sliceScale || "2",
@@ -609,14 +656,14 @@ export async function getDesignSlicesInfo(
 
 export function getDesignImageUrl(designObj) {
   if (!designObj.url) return "";
-  return designObj.url.replace(/\?x-oss-process=.*$/, "");
+  return rewriteUrl(designObj.url.replace(/\?x-oss-process=.*$/, ""));
 }
 
 export async function downloadFile(url, localPath, referer) {
   await mkdir(path.dirname(localPath), { recursive: true });
   const headers = {};
-  if (referer) headers.Referer = referer;
-  const response = await fetch(url, {
+  headers.Referer = referer || `${BASE_URL}/`;
+  const response = await fetch(rewriteUrl(url), {
     headers: { ...HEADERS, Cookie: getCookie(), ...headers },
     signal: AbortSignal.timeout(HTTP_TIMEOUT),
     redirect: "follow",

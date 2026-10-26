@@ -1,5 +1,7 @@
 # Lanhu 设计脚本参考
 
+> 私有部署：设置 `LANHU_HOST=https://lanhu.example.com:30080` 后，脚本会改用该 host、同源 `/api/dds/...` 与账号密码登录得到的会话 Cookie；资源地址会自动改写回该 host。
+
 ## 目录
 
 - [认证](#认证)

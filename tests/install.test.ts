@@ -6,9 +6,9 @@ describe("install wizard", () => {
     const run = vi.fn().mockResolvedValue(undefined);
     const result = await installCliAndSkill({ silent: false }, run);
     expect(run.mock.calls).toEqual([
-      ["npm", ["install", "-g", "lanhu-design@latest"], false],
-      ["npx", ["-y", "skills", "add", "oyjt/lanhu-design", "-y", "-g"], true],
+      ["npm", ["install", "-g", "@imaegoo/lanhu-design@latest"], false],
+      ["npx", ["-y", "skills", "add", "imaegoo/lanhu-design", "-y", "-g"], true],
     ]);
-    expect(result).toEqual({ cliInstalled: true, skillInstalled: true, skillSource: "oyjt/lanhu-design" });
+    expect(result).toEqual({ cliInstalled: true, skillInstalled: true, skillSource: "imaegoo/lanhu-design" });
   });
 });

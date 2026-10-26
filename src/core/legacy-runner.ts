@@ -20,7 +20,7 @@ async function repositoryRoot(): Promise<string> {
 export async function runLegacy(
   script: LegacyScript,
   args: string[],
-  options: { cookie?: string; timeoutMs?: number } = {},
+  options: { cookie?: string; timeoutMs?: number; host?: string } = {},
 ): Promise<unknown> {
   const root = await repositoryRoot();
   const file = path.join(root, "skills/lanhu-design/scripts", `${script}.mjs`);
@@ -30,6 +30,7 @@ export async function runLegacy(
       env: {
         ...process.env,
         ...(options.cookie ? { LANHU_COOKIE: options.cookie } : {}),
+        ...(options.host ? { LANHU_HOST: options.host } : {}),
         ...(options.timeoutMs ? { HTTP_TIMEOUT: String(options.timeoutMs) } : {}),
       },
       stdio: ["ignore", "pipe", "pipe"],
@@ -47,7 +48,7 @@ export async function runLegacy(
       }
       const message = redactSecrets(stderr.trim() || stdout.trim() || `旧脚本退出码：${code}`);
       const errorCode = code === 2 ? "LANHU_INVALID_ARGUMENT" : /认证|cookie/i.test(message) ? "LANHU_AUTH_EXPIRED" : "LANHU_API_ERROR";
-      reject(new LanhuError(errorCode, message, errorCode.startsWith("LANHU_AUTH") ? "运行：lanhu auth refresh 或 lanhu auth import" : undefined));
+      reject(new LanhuError(errorCode, message, errorCode.startsWith("LANHU_AUTH") ? "运行：lanhu auth login 或 lanhu auth import" : undefined));
     });
   });
 }

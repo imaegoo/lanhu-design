@@ -2,6 +2,17 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)；版本以 git tag（`v*`）形式发布，安装/更新时可指定 tag 锁定版本。
 
+## 1.5.0 - 2026-10-26
+
+私有部署分支（包名 `@imaegoo/lanhu-design`）。
+
+- 新增自定义蓝湖 host：`lanhu host set/reset`、全局 `--host`、`LANHU_HOST` 环境变量；解析优先级为参数 > 环境变量 > 配置文件 > 默认值。
+- 新增私有部署账号密码登录：`lanhu auth login -u <账号>` 调用 `/api/account/login`，保存会话 Cookie；私有部署不再尝试读取 `lanhuapp.com` 浏览器 Cookie。
+- 凭据按 host 分桶保存（`credentials.json` v2），兼容 1.x 单凭据文件迁移。
+- 私有部署适配：DDS 走同源 `/api/dds/...`；接口返回的 `lanhuapp.com`/内网 IP 资源地址自动改写回当前 host；兼容 `{ result }` 与 `{ code, result }` 两种响应结构。
+- 内置旧版 TLS 重协商兼容（`ERR_SSL_UNSAFE_LEGACY_RENEGOTIATION_DISABLED`）。
+- 版本号、安装向导与文档切换到 `@imaegoo/lanhu-design`。
+
 ## 1.4.2 - 2026-09-16
 
 - 优化 Agent Skill 安装：一键安装保持全局、非交互行为并隐藏 PromptScript 兼容性提示；单独安装 Skill 时由用户选择目标与范围。

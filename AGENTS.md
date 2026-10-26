@@ -4,7 +4,7 @@
 
 ## 项目目标
 
-- 提供 npm 包 `lanhu-design` 和可执行命令 `lanhu`。
+- 提供 npm 包 `@imaegoo/lanhu-design` 和可执行命令 `lanhu`；支持通过 `LANHU_HOST` / `lanhu host` 对接私有部署。
 - 提供兼容 Agent Skills 标准的 `skills/lanhu-design/`。
 - CLI 与 Skill 共享现有蓝湖脚本能力，不破坏旧脚本入口。
 
@@ -60,6 +60,6 @@ pnpm pack --dry-run
 ## 发布约定
 
 - 使用语义化版本。
-- npm 包名为 `lanhu-design`，二进制命令为 `lanhu`。
+- npm 包名为 `@imaegoo/lanhu-design`，二进制命令为 `lanhu`。
 - `v*` 标签必须与 `package.json` 版本一致；标签推送后由 `.github/workflows/publish.yml` 发布 npm 包，并在发布成功后创建 GitHub Release。
 - 不手动绕过 CI 或在验证失败时发布。

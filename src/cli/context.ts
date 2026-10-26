@@ -6,6 +6,7 @@ export interface GlobalOptions {
   verbose?: boolean;
   timeout?: string;
   cookie?: string;
+  host?: string;
 }
 
 export function globalOptions(command: Command): GlobalOptions {

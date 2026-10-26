@@ -50,10 +50,11 @@ export async function exportDesign(options: {
   scale: string;
   cookie: string;
   timeoutMs: number;
+  host: string;
   version: string;
 }) {
   const outputRoot = path.resolve(options.output);
-  const list = await runLegacy("get_designs", [options.url], { cookie: options.cookie, timeoutMs: options.timeoutMs });
+  const list = await runLegacy("get_designs", [options.url], { cookie: options.cookie, timeoutMs: options.timeoutMs, host: options.host });
   const design = selectDesign(list, options.design);
   const name = safeName(design.name);
   const target = path.join(outputRoot, name);
@@ -71,13 +72,13 @@ export async function exportDesign(options: {
   await mkdir(staging, { recursive: true });
   const warnings: string[] = [];
   try {
-    const image = await runLegacy("download_design_images", [options.url, "--designs", String(design.index), "--output", staging], { cookie: options.cookie, timeoutMs: options.timeoutMs });
-    await runLegacy("get_design_specs", [options.url, "--design", String(design.index), "--output", staging, "--download-images"], { cookie: options.cookie, timeoutMs: options.timeoutMs });
-    const slices = await runLegacy("get_design_slices", [options.url, "--design", String(design.index)], { cookie: options.cookie, timeoutMs: options.timeoutMs });
+    const image = await runLegacy("download_design_images", [options.url, "--designs", String(design.index), "--output", staging], { cookie: options.cookie, timeoutMs: options.timeoutMs, host: options.host });
+    await runLegacy("get_design_specs", [options.url, "--design", String(design.index), "--output", staging, "--download-images"], { cookie: options.cookie, timeoutMs: options.timeoutMs, host: options.host });
+    const slices = await runLegacy("get_design_slices", [options.url, "--design", String(design.index)], { cookie: options.cookie, timeoutMs: options.timeoutMs, host: options.host });
     const slicesPath = path.join(staging, "slices.json");
     await writeFile(slicesPath, `${JSON.stringify(slices, null, 2)}\n`, "utf8");
     try {
-      await runLegacy("download_slices", [slicesPath, "--output", path.join(staging, "assets"), "--scale", options.scale], { cookie: options.cookie, timeoutMs: options.timeoutMs });
+      await runLegacy("download_slices", [slicesPath, "--output", path.join(staging, "assets"), "--scale", options.scale], { cookie: options.cookie, timeoutMs: options.timeoutMs, host: options.host });
     } catch (error) {
       warnings.push(error instanceof Error ? error.message : String(error));
     }
