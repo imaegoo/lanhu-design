@@ -1,9 +1,43 @@
+# 发布 @imaegoo/lanhu-design 到 npm。
+#
+# 触发方式：
+#   1. 推送 v* 标签（原有流程）；
+#   2. 在 Actions 页面手动 Run workflow（支持版本递增 / dist-tag / dry-run）。
+#
+# 使用 npm OIDC 可信发布（Trusted Publishing），不需要 NPM_TOKEN：
+#   - npm 包设置页 → Trusted publishing → GitHub Actions
+#   - Organization or user: imaegoo
+#   - Repository: lanhu-design
+#   - Workflow filename: publish.yml（必须与本文件同名）
+#   - Environment: 留空（本工作流未使用 environment）
+#
+# 本地发布需要 `--provenance=false`；CI 中由 id-token 生成 provenance。
+
 name: Publish npm package
 
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "发布前递增版本（写入 package.json）"
+        type: choice
+        options: [none, patch, minor, major]
+        default: none
+      dist_tag:
+        description: "npm dist-tag"
+        type: string
+        default: latest
+      dry_run:
+        description: "仅构建与打包校验，不实际发布"
+        type: boolean
+        default: false
+      push_tag:
+        description: "发布成功后创建并推送 v<version> 标签（由标签流程创建 Release）"
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -19,6 +53,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v6
 
@@ -28,19 +64,38 @@ jobs:
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
 
+      - name: Show tool versions
+        run: |
+          node --version
+          npm --version
+          pnpm --version
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Bump version
+        if: github.event_name == 'workflow_dispatch' && inputs.bump != 'none'
+        run: npm version "${{ inputs.bump }}" --no-git-tag-version
+
+      - name: Resolve version
+        id: version
+        run: |
+          node --input-type=module -e "
+            import pkg from './package.json' with { type: 'json' };
+            console.log('name=' + pkg.name);
+            console.log('version=' + pkg.version);
+            console.log('tag=v' + pkg.version);
+          " >> "$GITHUB_OUTPUT"
+
       - name: Verify tag matches package version
-        run: >-
-          node --input-type=module -e
-          "import pkg from './package.json' with { type: 'json' };
-          const tag = process.env.GITHUB_REF_NAME;
-          const expected = 'v' + pkg.version;
-          if (tag !== expected) {
-            console.error('Release tag ' + tag + ' does not match package version ' + expected);
-            process.exit(1);
-          }"
+        if: github.event_name == 'push'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if [ "${GITHUB_REF_NAME}" != "v${VERSION}" ]; then
+            echo "::error::Release tag ${GITHUB_REF_NAME} does not match package version v${VERSION}"
+            exit 1
+          fi
 
       - name: Verify package
         run: pnpm check
@@ -48,13 +103,71 @@ jobs:
       - name: Preview package contents
         run: npm pack --dry-run
 
+      - name: Check whether version is already published
+        id: published
+        env:
+          PACKAGE: ${{ steps.version.outputs.name }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if npm view "${PACKAGE}@${VERSION}" version >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::${PACKAGE}@${VERSION} 已存在于 npm，跳过发布。"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Dry run notice
+        if: inputs.dry_run
+        run: echo "::notice::dry_run=true，已跳过 npm publish / 提交 / 打标签。"
+
       - name: Publish package
-        run: npm publish --access public --provenance
+        if: steps.published.outputs.exists != 'true' && !inputs.dry_run
+        env:
+          DIST_TAG: ${{ inputs.dist_tag || 'latest' }}
+        run: npm publish --access public --provenance --tag "$DIST_TAG"
+
+      - name: Commit version bump
+        if: github.event_name == 'workflow_dispatch' && inputs.bump != 'none' && !inputs.dry_run
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json
+          if git diff --cached --quiet; then
+            echo "::notice::package.json 无变更，跳过提交。"
+          else
+            git commit -m "chore(release): v${VERSION}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
+
+      - name: Create and push release tag
+        if: github.event_name == 'workflow_dispatch' && inputs.push_tag && !inputs.dry_run
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "::notice::标签 ${TAG} 已存在，跳过。"
+          else
+            git tag "${TAG}"
+            git push origin "${TAG}"
+          fi
 
       - name: Create GitHub release
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          awk -v v="${GITHUB_REF_NAME#v}" '$0 ~ "^## "v" - " {f=1; next} /^## /{f=0} f' CHANGELOG.md > release-notes.md
-          [ -s release-notes.md ] || { echo "No CHANGELOG section for ${GITHUB_REF_NAME#v}"; exit 1; }
-          gh release create "$GITHUB_REF_NAME" --verify-tag --notes-file release-notes.md --title "$GITHUB_REF_NAME"
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "::notice::Release ${TAG} 已存在，跳过。"
+            exit 0
+          fi
+          awk -v v="${VERSION}" '$0 ~ "^## "v" - " {f=1; next} /^## /{f=0} f' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "No CHANGELOG section for ${VERSION}"
+            exit 1
+          fi
+          gh release create "${TAG}" --verify-tag --notes-file release-notes.md --title "${TAG}"
