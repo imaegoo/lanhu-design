@@ -79,6 +79,8 @@ lanhu designs $env:LANHU_URL
 ```bash
 # 1. 设置私有部署地址（写入 ~/.config/lanhu-design/config.json）
 lanhu host set https://lanhu.example.com:30080
+# 只提供 http 时也可以：lanhu host set http://lanhu.example.com:30080
+# 此时接口返回的 https 切图地址会在下载前自动纠正为 http
 
 # 2. 账号密码登录（私有部署无法读取 lanhuapp.com 的浏览器 Cookie）
 lanhu auth login -u you@example.com
@@ -89,11 +91,12 @@ lanhu designs "https://lanhu.example.com:30080/web/#/item/project/stage?tid=...&
 
 host 解析优先级：`--host` 参数 > `LANHU_HOST` 环境变量 > 配置文件 > 默认 `https://lanhuapp.com`。
 
-CLI 会自动处理私有部署的三处差异：
+CLI 会自动处理私有部署的四处差异：
 
 1. 设计数据服务（DDS）与主站同源，走 `/api/dds/...`，不再请求 `dds.lanhuapp.com`；
 2. 接口返回的 `lanhuapp.com` 或内网 IP 资源地址会改写回当前 host；
-3. 旧版 TLS 重协商（`ERR_SSL_UNSAFE_LEGACY_RENEGOTIATION_DISABLED`）已内置兼容开关。
+3. host 使用 http 协议时，接口返回的同源 https 切图地址会在下载前自动纠正为 http；
+4. 旧版 TLS 重协商（`ERR_SSL_UNSAFE_LEGACY_RENEGOTIATION_DISABLED`）已内置兼容开关。
 
 常用命令：
 

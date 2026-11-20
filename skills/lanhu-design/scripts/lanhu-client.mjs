@@ -29,14 +29,18 @@ const HEADERS = {
 /**
  * 私有部署的接口仍可能返回 lanhuapp.com 或内网 IP 的资源地址，
  * 统一改写回当前 host，保证预览图、Schema、切图都能下载。
+ *
+ * 另外，baseUrl 是 http 协议时，同一主机的切图地址仍可能是 https；
+ * 这类部署通常没给资源启用 https，直接下载会失败，因此下载前纠正为 http。
+ * 第三方 CDN 的 https 地址不受影响。
  */
 export function rewriteUrl(value) {
   if (!value || !CUSTOM_HOST || typeof value !== "string") return value;
   if (!/^https?:\/\//i.test(value)) return value;
   try {
-    const parsed = new URL(value);
     const base = new URL(BASE_URL);
-    if (parsed.host === base.host) return value;
+    const parsed = new URL(value);
+    if (parsed.hostname === base.hostname) return alignProtocolWithHost(value, parsed, base);
     const lanhuHost = /(^|\.)lanhuapp\.com$/i.test(parsed.hostname);
     const assetPath = parsed.pathname.startsWith("/mos/");
     if (!lanhuHost && !assetPath) return value;
@@ -44,6 +48,12 @@ export function rewriteUrl(value) {
   } catch {
     return value;
   }
+}
+
+/** baseUrl 是 http 时，把同一主机上的 https 切图地址纠正为 http，避免私有部署证书缺失导致下载失败。 */
+function alignProtocolWithHost(value, parsed, base) {
+  if (base.protocol !== "http:" || parsed.protocol !== "https:") return value;
+  return `http:${value.slice("https:".length)}`;
 }
 
 export function rewriteUrlsDeep(value) {

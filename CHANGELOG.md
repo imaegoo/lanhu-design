@@ -2,6 +2,12 @@
 
 本项目遵循[语义化版本](https://semver.org/lang/zh-CN/)；版本以 git tag（`v*`）形式发布，安装/更新时可指定 tag 锁定版本。
 
+## Unreleased
+
+- 修复蓝湖 host 为 http 协议时切图下载仍走 https 导致失败：`rewriteUrl` 会在下载前把与 host 同主机的 https 切图地址自动纠正为 http，第三方 https CDN 保持原样。涉及 `lanhu slices` / `lanhu download` / `lanhu export`、`get_design_slices.mjs`、`download_slices.mjs` 与 `get_design_specs.mjs --download-images`。
+- 自检补充 http host 用例：模拟返回同主机 https 切图地址，验证协议被纠正为 `http://`、第三方 CDN 不受影响，并端到端下载成功。
+- 合并上游 1.4.3（PS 稿切图索引作用域修复）。
+
 ## 1.5.1 - 2026-10-26
 
 - 新增手动触发的 npm OIDC 可信发布工作流（`publish.yml`）：支持版本递增、dist-tag、dry-run，发布后可自动提交版本、推送标签并创建 GitHub Release。

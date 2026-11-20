@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { access, cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -404,6 +404,142 @@ async function checkPhotoshopSlices() {
   }
 }
 
+async function checkHttpHostSliceProtocol() {
+  // 私有部署常见配置：baseUrl 是 http，但蓝湖返回的同源切图地址仍是 https。
+  process.env.LANHU_HOST = "http://lanhu.internal:8080";
+  process.env.LANHU_COOKIE = "self-check";
+  const originalFetch = globalThis.fetch;
+  const fetched = [];
+  globalThis.fetch = async (url) => {
+    const href = String(url);
+    fetched.push(href);
+    if (href.includes("/api/project/images")) {
+      return Response.json({
+        code: "00000",
+        data: {
+          name: "Project",
+          images: [
+            { id: "d1", name: "Home", width: 100, height: 100, url: "https://lanhu.internal:8080/home.png" },
+          ],
+        },
+      });
+    }
+    if (href.includes("/api/project/image")) {
+      return Response.json({
+        code: "00000",
+        result: { versions: [{ id: "v1", json_url: "https://lanhu.internal:8080/sketch.json" }] },
+      });
+    }
+    if (href.includes("sketch.json")) {
+      return Response.json({
+        artboard: {
+          name: "Artboard",
+          layers: [
+            {
+              id: "s1",
+              name: "Icon",
+              type: "bitmap",
+              left: 1,
+              top: 2,
+              ddsImage: { imageUrl: "https://lanhu.internal:8080/icon.png", size: "10x10" },
+            },
+            {
+              id: "s2",
+              name: "Remote",
+              type: "bitmap",
+              left: 3,
+              top: 4,
+              // 第三方 https CDN 与蓝湖协议无关，不能被降级成 http。
+              ddsImage: { imageUrl: "https://cdn.third-party.test/remote.png", size: "10x10" },
+            },
+          ],
+        },
+      });
+    }
+    throw new Error(`Unexpected fetch: ${href}`);
+  };
+
+  try {
+    // 用查询串强制取得新的模块实例：LANHU_HOST 在模块加载时读取，前面用例已缓存旧实例。
+    const clientUrl = pathToFileURL(path.join(skillScripts, "lanhu-client.mjs")).href;
+    const { getDesignSlicesInfo } = await import(`${clientUrl}?http-host=1`);
+    const result = await getDesignSlicesInfo(
+      "http://lanhu.internal:8080/web/#/item/project/stage?pid=p1&tid=t1",
+      "1",
+    );
+    assert.equal(result.total_slices, 2);
+    const slice = result.slices[0];
+    assert.equal(slice.download_url, "http://lanhu.internal:8080/icon.png");
+    assert.equal(slice.scale_urls["2x"], "http://lanhu.internal:8080/icon.png");
+    assert.match(slice.scale_urls["1x"], /^http:\/\/lanhu\.internal:8080\//);
+    for (const url of Object.values(slice.scale_urls)) {
+      assert.match(url, /^http:\/\/lanhu\.internal:8080\//);
+    }
+    // 第三方 https CDN 与蓝湖 host 不同源，协议必须保持原样。
+    assert.equal(result.slices[1].download_url, "https://cdn.third-party.test/remote.png");
+    for (const url of fetched) {
+      assert.doesNotMatch(url, /^https:\/\/lanhu\.internal:8080\//, "http host 不应请求同源 https");
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+    delete process.env.LANHU_HOST;
+  }
+}
+
+async function checkHttpHostSliceDownload() {
+  // 端到端：http host 下，切图 JSON 里的同源 https 地址应被纠正为 http 并成功下载。
+  const { createServer } = await import("node:http");
+  const server = createServer((request, response) => {
+    if (request.url === "/slice.png") {
+      response.writeHead(200, { "content-type": "image/png" });
+      response.end("http-slice-bytes");
+      return;
+    }
+    response.writeHead(404).end();
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const { port } = server.address();
+  const tempDir = await mkdtemp(path.join(tmpdir(), "lanhu-http-host-"));
+  try {
+    const slicesPath = path.join(tempDir, "slices.json");
+    const outDir = path.join(tempDir, "out");
+    await writeFile(slicesPath, JSON.stringify({
+      slices: [
+        { id: "s1", name: "Icon", download_url: `https://127.0.0.1:${port}/slice.png` },
+      ],
+    }));
+    // 子进程必须异步运行：spawnSync 会阻塞父进程事件循环，本地测试服务器无法响应。
+    const result = await new Promise((resolve) => {
+      const child = spawn(process.execPath, [
+        path.join(skillScripts, "download_slices.mjs"),
+        slicesPath,
+        "--output",
+        outDir,
+        "--scale",
+        "2x",
+        "--retries",
+        "0",
+      ], {
+        env: {
+          ...process.env,
+          LANHU_HOST: `http://127.0.0.1:${port}`,
+          LANHU_COOKIE: "self-check",
+        },
+      });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (chunk) => { stdout += String(chunk); });
+      child.stderr.on("data", (chunk) => { stderr += String(chunk); });
+      child.once("close", (status) => resolve({ status, stdout, stderr }));
+    });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    assert.equal(await readFile(path.join(outDir, "Icon@2x.png"), "utf8"), "http-slice-bytes");
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+    await rm(tempDir, { recursive: true, force: true });
+  }
+}
+
 async function checkScaleFallback() {
   const tempDir = await mkdtemp(path.join(tmpdir(), "lanhu-design-check-"));
   try {
@@ -453,5 +589,7 @@ checkFigmaImageGroupSlice();
 checkImageLocalization();
 await checkSliceDeduping();
 await checkPhotoshopSlices();
+await checkHttpHostSliceProtocol();
+await checkHttpHostSliceDownload();
 await checkScaleFallback();
 console.log("self_check passed");
