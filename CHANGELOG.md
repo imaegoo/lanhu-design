@@ -18,6 +18,11 @@
 - 内置旧版 TLS 重协商兼容（`ERR_SSL_UNSAFE_LEGACY_RENEGOTIATION_DISABLED`）。
 - 版本号、安装向导与文档切换到 `@imaegoo/lanhu-design`。
 
+## 1.4.3 - 2026-11-13
+
+- 修复 PS（`type: ps`）设计稿调用 `lanhu slices` / `lanhu download` 必定失败：索引图层用的具名函数表达式 `indexPs` 越出自身作用域，`sketchData.info` 非空时抛 `ReferenceError: indexPs is not defined`。改为函数声明后，`board` 与 `info` 两棵图层树都会建索引。
+- 扩展自检：PS 镜头同时提供 `board.layers` 与 `info[]` 图层树，验证嵌套切图能被正确索引。
+
 ## 1.4.2 - 2026-09-16
 
 - 优化 Agent Skill 安装：一键安装保持全局、非交互行为并隐藏 PromptScript 兼容性提示；单独安装 Skill 时由用户选择目标与范围。
